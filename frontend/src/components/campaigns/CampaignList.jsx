@@ -24,16 +24,8 @@ const CampaignList = () => {
       setLoading(true)
       const response = await campaignService.getCampaigns()
       
-      console.log('Campaign API Response:', response)
-      
-      // Handle both response.data and response directly
       const campaignData = response.data || response || []
-      
       setCampaigns(Array.isArray(campaignData) ? campaignData : [])
-      
-      if (campaignData.length === 0) {
-        console.warn('No campaigns found in response')
-      }
     } catch (error) {
       console.error('Failed to load campaigns:', error)
       toast.error('Failed to load campaigns')
@@ -65,8 +57,8 @@ const CampaignList = () => {
       accessor: 'name',
       cell: (row) => (
         <div>
-          <p className="font-medium text-white">{row.name}</p>
-          <p className="text-sm text-white/60 capitalize">{row.campaign_type?.replace('_', ' ')}</p>
+          <p className="font-medium text-gray-900">{row.name}</p>
+          <p className="text-sm text-gray-600 capitalize">{row.campaign_type?.replace('_', ' ')}</p>
         </div>
       ),
     },
@@ -83,8 +75,8 @@ const CampaignList = () => {
       header: 'Period',
       cell: (row) => (
         <div>
-          <p className="text-white text-sm">{formatDate(row.start_date)}</p>
-          <p className="text-white/60 text-sm">to {formatDate(row.end_date)}</p>
+          <p className="text-gray-900 text-sm">{formatDate(row.start_date)}</p>
+          <p className="text-gray-600 text-sm">to {formatDate(row.end_date)}</p>
         </div>
       ),
     },
@@ -98,14 +90,14 @@ const CampaignList = () => {
         return (
           <div className="w-full">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-sm text-white">{completionPercentage}%</span>
-              <span className="text-sm text-white/60">
+              <span className="text-sm text-gray-900">{completionPercentage}%</span>
+              <span className="text-sm text-gray-600">
                 {completedReviews}/{totalReviews}
               </span>
             </div>
-            <div className="w-full bg-white/10 rounded-full h-2">
+            <div className="w-full bg-gray-200 rounded-full h-2">
               <div
-                className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-300"
+                className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full transition-all duration-300"
                 style={{ width: `${completionPercentage}%` }}
               />
             </div>
@@ -155,13 +147,29 @@ const CampaignList = () => {
     },
   ]
 
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Campaigns</h1>
+            <p className="text-gray-600">Manage access review campaigns</p>
+          </div>
+        </div>
+        <Card>
+          <Loader />
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Campaigns</h1>
-          <p className="text-white/70">Manage access review campaigns</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Campaigns</h1>
+          <p className="text-gray-600">Manage access review campaigns</p>
         </div>
         <Button
           variant="primary"
@@ -173,19 +181,13 @@ const CampaignList = () => {
       </div>
 
       {/* Campaigns Table */}
-      {loading ? (
-        <Card>
-          <Loader />
-        </Card>
-      ) : (
-        <Table
-          columns={columns}
-          data={campaigns}
-          loading={loading}
-          emptyMessage="No campaigns found"
-          onRowClick={(row) => navigate(`/campaigns/${row.id}`)}
-        />
-      )}
+      <Table
+        columns={columns}
+        data={campaigns}
+        loading={loading}
+        emptyMessage="No campaigns found"
+        onRowClick={(row) => navigate(`/campaigns/${row.id}`)}
+      />
     </div>
   )
 }
