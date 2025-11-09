@@ -1,0 +1,198 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply box-border;
+  }
+
+  body {
+    @apply font-sans antialiased;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Professional background pattern */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: 
+      linear-gradient(90deg, rgba(200, 200, 200, 0.05) 1px, transparent 1px),
+      linear-gradient(rgba(200, 200, 200, 0.05) 1px, transparent 1px);
+    background-size: 20px 20px;
+    z-index: -1;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-gray-100;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-400 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500;
+  }
+}
+
+@layer components {
+  /* Glass effect classes - Updated for light theme */
+  .glass {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(200, 200, 200, 0.3);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  }
+
+  .glass-dark {
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(200, 200, 200, 0.4);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.2);
+  }
+
+  .glass-card {
+    @apply glass rounded-2xl p-6 transition-all duration-300;
+  }
+
+  .glass-card:hover {
+    @apply shadow-xl transform scale-[1.01];
+    background: rgba(255, 255, 255, 0.98);
+  }
+
+  /* Button styles - Updated for light theme */
+  .btn-glass {
+    @apply glass px-6 py-2.5 rounded-lg font-medium text-gray-700 transition-all duration-300;
+    @apply hover:bg-gray-100 hover:shadow-lg active:scale-95;
+  }
+
+  .btn-primary {
+    @apply bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-2.5 rounded-lg font-medium;
+    @apply hover:from-blue-700 hover:to-blue-800 transition-all duration-300;
+    @apply shadow-lg hover:shadow-xl active:scale-95;
+  }
+
+  .btn-secondary {
+    @apply glass text-gray-700 px-6 py-2.5 rounded-lg font-medium;
+    @apply hover:bg-gray-100 transition-all duration-300;
+  }
+
+  /* Input styles - Updated for light theme */
+  .input-glass {
+    @apply glass w-full px-4 py-3 rounded-lg text-gray-700 placeholder-gray-400;
+    @apply focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-300;
+    @apply border border-gray-200;
+  }
+
+  /* Card styles */
+  .card-glass {
+    @apply glass-card;
+  }
+
+  /* Text gradient - Updated for light theme */
+  .text-gradient {
+    @apply bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent;
+  }
+
+  /* Shimmer effect */
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .shimmer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0,
+      rgba(255, 255, 255, 0.3) 20%,
+      rgba(255, 255, 255, 0.6) 60%,
+      rgba(255, 255, 255, 0)
+    );
+    animation: shimmer 2s infinite;
+  }
+
+  @keyframes shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  /* Fade in animation */
+  .fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+
+  /* Status badges - Updated colors for light theme */
+  .badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply badge bg-green-100 text-green-800 border border-green-300;
+  }
+
+  .badge-warning {
+    @apply badge bg-yellow-100 text-yellow-800 border border-yellow-300;
+  }
+
+  .badge-danger {
+    @apply badge bg-red-100 text-red-800 border border-red-300;
+  }
+
+  .badge-info {
+    @apply badge bg-blue-100 text-blue-800 border border-blue-300;
+  }
+
+  /* Table styles - Updated for light theme */
+  .table-glass {
+    @apply w-full;
+  }
+
+  .table-glass thead {
+    @apply bg-gray-50 border-b-2 border-gray-200;
+  }
+
+  .table-glass th {
+    @apply px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider;
+  }
+
+  .table-glass td {
+    @apply px-6 py-4 text-sm text-gray-800;
+  }
+
+  .table-glass tbody tr {
+    @apply border-b border-gray-100 hover:bg-gray-50 transition-colors duration-150;
+  }
+}
+
+@layer utilities {
+  .text-shadow {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .text-shadow-lg {
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  }
+}
