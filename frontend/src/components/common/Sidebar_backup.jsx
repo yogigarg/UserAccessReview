@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { 
   HiHome, 
@@ -7,27 +6,19 @@ import {
   HiCheckCircle,
   HiShieldCheck,
   HiChartBar,
-  HiExclamationCircle,
-  HiChevronDown,
-  HiChevronRight,
 } from 'react-icons/hi'
 import { useAuth } from '../../context/AuthContext'
 
 const Sidebar = () => {
   const { user } = useAuth()
-  const [sodMenuOpen, setSodMenuOpen] = useState(false)
 
   const menuItems = [
     { name: 'Dashboard', path: '/dashboard', icon: HiHome },
     { name: 'Users', path: '/users', icon: HiUsers, adminOnly: true },
     { name: 'Campaigns', path: '/campaigns', icon: HiClipboardList, adminOnly: true },
     { name: 'Reviews', path: '/reviews', icon: HiCheckCircle },
+    { name: 'SOD Rules', path: '/sod', icon: HiShieldCheck, adminOnly: true },
     { name: 'Reports', path: '/reports', icon: HiChartBar, adminOnly: true },
-  ]
-
-  const sodMenuItems = [
-    { name: 'SOD Rules', path: '/sod/rules', icon: HiShieldCheck },
-    { name: 'SOD Violations', path: '/sod/violations', icon: HiExclamationCircle },
   ]
 
   const isAdmin = ['admin', 'compliance_manager'].includes(user?.role)
@@ -63,48 +54,6 @@ const Sidebar = () => {
               </NavLink>
             )
           })}
-
-          {/* SOD Menu with Submenu - Only for admins */}
-          {isAdmin && (
-            <div className="pt-2">
-              <button
-                onClick={() => setSodMenuOpen(!sodMenuOpen)}
-                className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all duration-200"
-              >
-                <div className="flex items-center gap-3">
-                  <HiShieldCheck className="h-5 w-5" />
-                  <span className="font-medium">Segregation of Duties</span>
-                </div>
-                {sodMenuOpen ? (
-                  <HiChevronDown className="h-4 w-4" />
-                ) : (
-                  <HiChevronRight className="h-4 w-4" />
-                )}
-              </button>
-
-              {/* SOD Submenu */}
-              {sodMenuOpen && (
-                <div className="mt-1 ml-4 space-y-1">
-                  {sodMenuItems.map((item) => (
-                    <NavLink
-                      key={item.path}
-                      to={item.path}
-                      className={({ isActive }) =>
-                        `flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200 ${
-                          isActive
-                            ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-200'
-                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                        }`
-                      }
-                    >
-                      <item.icon className="h-4 w-4" />
-                      <span className="font-medium text-sm">{item.name}</span>
-                    </NavLink>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </nav>
 
         {/* User info */}

@@ -12,6 +12,8 @@ import CampaignForm from './components/campaigns/CampaignForm'
 import ReviewList from './components/reviews/ReviewList'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import Loader from './components/common/Loader'
+import SODRules from './components/sod/SODRules'
+import SODViolations from './components/sod/SODViolations'
 
 function App() {
   const { loading } = useAuth()
@@ -44,6 +46,8 @@ function App() {
           <Route path="campaigns/:id/edit" element={<CampaignForm />} />
           
           <Route path="reviews" element={<ReviewList />} />
+	  <Route path="sod/rules" element={<SODRules />} />
+	  <Route path="sod/violations" element={<SODViolations />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
