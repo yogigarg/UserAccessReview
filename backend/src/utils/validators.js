@@ -69,7 +69,7 @@ const validators = {
   createApplication: [
     body('name').trim().notEmpty().withMessage('Application name is required'),
     body('code').trim().notEmpty().withMessage('Application code is required'),
-    body('applicationType').trim().notEmpty().withMessage('Application type is required'),
+    body('applicationType').optional().trim(),
     body('businessCriticality').optional().isIn(['critical', 'high', 'medium', 'low']),
     validate,
   ],

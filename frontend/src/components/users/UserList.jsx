@@ -67,7 +67,7 @@ const UserList = () => {
       header: 'Employee ID',
       accessor: 'employee_id',
       cell: (row) => (
-        <span className="font-medium text-white">{row.employee_id}</span>
+        <span className="font-medium text-gray-900">{row.employee_id}</span>
       ),
     },
     {
@@ -81,8 +81,8 @@ const UserList = () => {
             </span>
           </div>
           <div>
-            <p className="font-medium text-white">{row.first_name} {row.last_name}</p>
-            <p className="text-sm text-white/60">{row.email}</p>
+            <p className="font-medium text-gray-900">{row.first_name} {row.last_name}</p>
+            <p className="text-sm text-gray-600">{row.email}</p>
           </div>
         </div>
       ),
@@ -91,7 +91,7 @@ const UserList = () => {
       header: 'Department',
       accessor: 'department_name',
       cell: (row) => (
-        <span className="text-white/80">{row.department_name || 'N/A'}</span>
+        <span className="text-gray-900">{row.department_name || 'N/A'}</span>
       ),
     },
     {
@@ -116,7 +116,7 @@ const UserList = () => {
       header: 'Access Items',
       accessor: 'access_count',
       cell: (row) => (
-        <span className="text-white font-medium">{row.access_count || 0}</span>
+        <span className="text-gray-900 font-medium">{row.access_count || 0}</span>
       ),
     },
     {
@@ -136,6 +136,22 @@ const UserList = () => {
       ),
     },
   ]
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Users</h1>
+            <p className="text-gray-600">Manage users and their access</p>
+          </div>
+        </div>
+        <Card>
+          <Loader />
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -173,51 +189,43 @@ const UserList = () => {
       </Card>
 
       {/* Users Table */}
-      {loading ? (
-        <Card>
-          <Loader />
-        </Card>
-      ) : (
-        <>
-          <Table
-            columns={columns}
-            data={users}
-            loading={loading}
-            emptyMessage="No users found"
-            onRowClick={(row) => navigate(`/users/${row.id}`)}
-          />
+      <Table
+        columns={columns}
+        data={users}
+        loading={loading}
+        emptyMessage="No users found"
+        onRowClick={(row) => navigate(`/users/${row.id}`)}
+      />
 
-          {/* Pagination */}
-          {pagination.total > pagination.limit && (
-            <Card>
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-white/70">
-                  Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
-                  {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
-                  {pagination.total} users
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={pagination.page === 1}
-                    onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={pagination.page >= pagination.totalPages}
-                    onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          )}
-        </>
+      {/* Pagination */}
+      {pagination.total > pagination.limit && (
+        <Card>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-600">
+              Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
+              {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
+              {pagination.total} users
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={pagination.page === 1}
+                onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={pagination.page >= pagination.totalPages}
+                onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        </Card>
       )}
     </div>
   )

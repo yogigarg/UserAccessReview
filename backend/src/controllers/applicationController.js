@@ -10,25 +10,25 @@ const getApplications = async (req, res) => {
     const { page = 1, limit = 20, search, applicationType, isActive } = req.query;
     const { limit: queryLimit, offset } = getPagination(page, limit);
 
-    let whereConditions = ['organization_id = $1'];
-    let params = [req.user.organizationId];
+    let whereConditions = ['a.organization_id = $1'];
+    let params = [req.user.organization_id]; // Changed from organizationId
     let paramCount = 1;
 
     if (search) {
       paramCount++;
-      whereConditions.push(`(name ILIKE $${paramCount} OR code ILIKE $${paramCount})`);
+      whereConditions.push(`(a.name ILIKE $${paramCount} OR a.code ILIKE $${paramCount} OR a.vendor ILIKE $${paramCount})`);
       params.push(`%${search}%`);
     }
 
     if (applicationType) {
       paramCount++;
-      whereConditions.push(`application_type = $${paramCount}`);
+      whereConditions.push(`a.application_type = $${paramCount}`);
       params.push(applicationType);
     }
 
     if (isActive !== undefined) {
       paramCount++;
-      whereConditions.push(`is_active = $${paramCount}`);
+      whereConditions.push(`a.is_active = $${paramCount}`);
       params.push(isActive === 'true');
     }
 
@@ -36,7 +36,7 @@ const getApplications = async (req, res) => {
 
     // Get total count
     const countResult = await query(
-      `SELECT COUNT(*) as total FROM applications WHERE ${whereClause}`,
+      `SELECT COUNT(*) as total FROM applications a WHERE ${whereClause}`,
       params
     );
 
@@ -85,7 +85,7 @@ const getApplication = async (req, res) => {
        FROM applications a
        LEFT JOIN users u ON u.id = a.owner_id
        WHERE a.id = $1 AND a.organization_id = $2`,
-      [id, req.user.organizationId]
+      [id, req.user.organization_id] // Changed from organizationId
     );
 
     if (result.rows.length === 0) {
@@ -115,12 +115,13 @@ const createApplication = async (req, res) => {
       businessCriticality,
       complianceScope,
       connectorType,
+      isActive,
     } = req.body;
 
     // Check if application code already exists
     const existing = await query(
       'SELECT id FROM applications WHERE code = $1 AND organization_id = $2',
-      [code, req.user.organizationId]
+      [code, req.user.organization_id] // Changed from organizationId
     );
 
     if (existing.rows.length > 0) {
@@ -134,32 +135,30 @@ const createApplication = async (req, res) => {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *`,
       [
-        req.user.organizationId,
+        req.user.organization_id, // Changed from organizationId
         name,
         code,
-        description,
-        applicationType,
-        vendor,
-        ownerId,
-        businessCriticality,
-        complianceScope,
-        connectorType,
-        true
+        description || null,
+        applicationType || null,
+        vendor || null,
+        ownerId || null,
+        businessCriticality || 'medium',
+        complianceScope || null,
+        connectorType || null,
+        isActive !== undefined ? isActive : true,
       ]
     );
-
-    const newApp = result.rows[0];
 
     // Log audit
     await query(
       `INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id, entity_name)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [req.user.organizationId, req.user.userId, 'create', 'application', newApp.id, name]
+      [req.user.organization_id, req.user.id, 'create', 'application', result.rows[0].id, name] // Changed field names
     );
 
-    logger.info(`Application created: ${name} by ${req.user.email}`);
+    logger.info(`Application created: ${code} by ${req.user.email}`);
 
-    return successResponse(res, newApp, 'Application created successfully', 201);
+    return successResponse(res, result.rows[0], 'Application created successfully', 201);
 
   } catch (error) {
     logger.error('Create application error:', error);
@@ -173,19 +172,45 @@ const createApplication = async (req, res) => {
 const updateApplication = async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
 
-    // Check if application exists
+    // Verify application exists and belongs to organization
     const existing = await query(
       'SELECT * FROM applications WHERE id = $1 AND organization_id = $2',
-      [id, req.user.organizationId]
+      [id, req.user.organization_id] // Changed from organizationId
     );
 
     if (existing.rows.length === 0) {
       return errorResponse(res, 'Application not found', 404);
     }
 
-    // Build dynamic update query
+    // Map camelCase to snake_case
+    const fieldMapping = {
+      name: 'name',
+      description: 'description',
+      applicationType: 'application_type',
+      vendor: 'vendor',
+      ownerId: 'owner_id',
+      businessCriticality: 'business_criticality',
+      complianceScope: 'compliance_scope',
+      connectorType: 'connector_type',
+      connectorConfig: 'connector_config',
+      isActive: 'is_active',
+      riskScore: 'risk_score',
+      metadata: 'metadata',
+    };
+
+    const updates = {};
+    Object.keys(req.body).forEach((key) => {
+      const dbField = fieldMapping[key];
+      if (dbField && req.body[key] !== undefined) {
+        updates[dbField] = req.body[key];
+      }
+    });
+
+    if (Object.keys(updates).length === 0) {
+      return errorResponse(res, 'No valid fields to update', 400);
+    }
+
     const fields = [];
     const values = [];
     let paramCount = 0;
@@ -195,10 +220,6 @@ const updateApplication = async (req, res) => {
       fields.push(`${key} = $${paramCount}`);
       values.push(updates[key]);
     });
-
-    if (fields.length === 0) {
-      return errorResponse(res, 'No fields to update', 400);
-    }
 
     paramCount++;
     values.push(id);
@@ -214,7 +235,7 @@ const updateApplication = async (req, res) => {
     await query(
       `INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id, entity_name)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [req.user.organizationId, req.user.userId, 'update', 'application', id, result.rows[0].name]
+      [req.user.organization_id, req.user.id, 'update', 'application', id, result.rows[0].name] // Changed field names
     );
 
     logger.info(`Application updated: ${id} by ${req.user.email}`);

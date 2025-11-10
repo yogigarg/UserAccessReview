@@ -28,9 +28,15 @@ const UserDetail = () => {
         userService.getUser(id),
         userService.getUserAccess(id),
       ])
-      setUser(userData)
-      setUserAccess(accessData)
+      
+      // Handle nested response
+      const actualUserData = userData.data || userData
+      const actualAccessData = accessData.data || accessData
+      
+      setUser(actualUserData)
+      setUserAccess(Array.isArray(actualAccessData) ? actualAccessData : [])
     } catch (error) {
+      console.error('Failed to load user details:', error)
       toast.error('Failed to load user details')
     } finally {
       setLoading(false)
@@ -38,13 +44,32 @@ const UserDetail = () => {
   }
 
   if (loading) {
-    return <Loader fullScreen />
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            icon={HiArrowLeft}
+            onClick={() => navigate('/users')}
+          >
+            Back
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">User Details</h1>
+            <p className="text-gray-600">Complete information and access history</p>
+          </div>
+        </div>
+        <Card>
+          <Loader />
+        </Card>
+      </div>
+    )
   }
 
   if (!user) {
     return (
       <Card>
-        <p className="text-white/70 text-center py-8">User not found</p>
+        <p className="text-gray-600 text-center py-8">User not found</p>
       </Card>
     )
   }
@@ -55,8 +80,8 @@ const UserDetail = () => {
       accessor: 'application_name',
       cell: (row) => (
         <div>
-          <p className="font-medium text-white">{row.application_name}</p>
-          <p className="text-sm text-white/60">{row.application_code}</p>
+          <p className="font-medium text-gray-900">{row.application_name}</p>
+          <p className="text-sm text-gray-600">{row.application_code}</p>
         </div>
       ),
     },
@@ -64,7 +89,7 @@ const UserDetail = () => {
       header: 'Role',
       accessor: 'role_name',
       cell: (row) => (
-        <span className="text-white/80">{row.role_name || 'N/A'}</span>
+        <span className="text-gray-900">{row.role_name || 'N/A'}</span>
       ),
     },
     {
@@ -79,12 +104,16 @@ const UserDetail = () => {
     {
       header: 'Granted Date',
       accessor: 'grant_date',
-      cell: (row) => formatDate(row.grant_date),
+      cell: (row) => <span className="text-gray-900">{formatDate(row.grant_date)}</span>,
     },
     {
       header: 'Last Used',
       accessor: 'last_used_date',
-      cell: (row) => row.last_used_date ? formatDate(row.last_used_date) : 'Never',
+      cell: (row) => (
+        <span className="text-gray-900">
+          {row.last_used_date ? formatDate(row.last_used_date) : 'Never'}
+        </span>
+      ),
     },
     {
       header: 'Status',
@@ -109,8 +138,8 @@ const UserDetail = () => {
           Back
         </Button>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold text-white mb-2">User Details</h1>
-          <p className="text-white/70">Complete information and access history</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">User Details</h1>
+          <p className="text-gray-600">Complete information and access history</p>
         </div>
       </div>
 
@@ -123,7 +152,7 @@ const UserDetail = () => {
                 {user.first_name?.charAt(0)}{user.last_name?.charAt(0)}
               </span>
             </div>
-            <h2 className="text-2xl font-bold text-white mb-1">
+            <h2 className="text-2xl font-bold text-gray-900 mb-1">
               {user.first_name} {user.last_name}
             </h2>
             <Badge variant={getStatusColor(user.status)}>
@@ -133,34 +162,34 @@ const UserDetail = () => {
 
           <div className="mt-6 space-y-4">
             <div className="flex items-start gap-3">
-              <HiMail className="h-5 w-5 text-white/50 mt-0.5" />
+              <HiMail className="h-5 w-5 text-gray-500 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm text-white/60">Email</p>
-                <p className="text-white">{user.email}</p>
+                <p className="text-sm text-gray-600">Email</p>
+                <p className="text-gray-900">{user.email}</p>
               </div>
             </div>
 
             <div className="flex items-start gap-3">
-              <HiBriefcase className="h-5 w-5 text-white/50 mt-0.5" />
+              <HiBriefcase className="h-5 w-5 text-gray-500 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm text-white/60">Job Title</p>
-                <p className="text-white">{user.job_title || 'N/A'}</p>
+                <p className="text-sm text-gray-600">Job Title</p>
+                <p className="text-gray-900">{user.job_title || 'N/A'}</p>
               </div>
             </div>
 
             <div className="flex items-start gap-3">
-              <HiCalendar className="h-5 w-5 text-white/50 mt-0.5" />
+              <HiCalendar className="h-5 w-5 text-gray-500 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm text-white/60">Hire Date</p>
-                <p className="text-white">{formatDate(user.hire_date)}</p>
+                <p className="text-sm text-gray-600">Hire Date</p>
+                <p className="text-gray-900">{formatDate(user.hire_date)}</p>
               </div>
             </div>
 
             <div className="flex items-start gap-3">
-              <HiShieldCheck className="h-5 w-5 text-white/50 mt-0.5" />
+              <HiShieldCheck className="h-5 w-5 text-gray-500 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm text-white/60">Role</p>
-                <p className="text-white capitalize">{user.role?.replace('_', ' ')}</p>
+                <p className="text-sm text-gray-600">Role</p>
+                <p className="text-gray-900 capitalize">{user.role?.replace('_', ' ')}</p>
               </div>
             </div>
           </div>
@@ -171,8 +200,8 @@ const UserDetail = () => {
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-white/70 mb-1">Active Access</p>
-                <p className="text-3xl font-bold text-white">{user.active_access_count || 0}</p>
+                <p className="text-sm text-gray-600 mb-1">Active Access</p>
+                <p className="text-3xl font-bold text-gray-900">{user.active_access_count || 0}</p>
               </div>
               <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
                 <HiShieldCheck className="h-8 w-8 text-white" />
@@ -183,8 +212,8 @@ const UserDetail = () => {
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-white/70 mb-1">SOD Violations</p>
-                <p className="text-3xl font-bold text-white">{user.sod_violation_count || 0}</p>
+                <p className="text-sm text-gray-600 mb-1">SOD Violations</p>
+                <p className="text-3xl font-bold text-gray-900">{user.sod_violation_count || 0}</p>
               </div>
               <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center">
                 <HiShieldCheck className="h-8 w-8 text-white" />
@@ -195,8 +224,8 @@ const UserDetail = () => {
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-white/70 mb-1">Risk Score</p>
-                <p className="text-3xl font-bold text-white">{user.risk_score || 0}</p>
+                <p className="text-sm text-gray-600 mb-1">Risk Score</p>
+                <p className="text-3xl font-bold text-gray-900">{user.risk_score || 0}</p>
               </div>
               <div className={`h-16 w-16 rounded-2xl bg-gradient-to-br ${
                 (user.risk_score || 0) >= 70 ? 'from-red-500 to-red-600' :
@@ -211,9 +240,9 @@ const UserDetail = () => {
           <Card>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-white/70 mb-1">Department</p>
-                <p className="text-lg font-medium text-white">{user.department_name || 'N/A'}</p>
-                <p className="text-sm text-white/60 mt-1">
+                <p className="text-sm text-gray-600 mb-1">Department</p>
+                <p className="text-lg font-medium text-gray-900">{user.department_name || 'N/A'}</p>
+                <p className="text-sm text-gray-600 mt-1">
                   Manager: {user.manager_name || 'N/A'}
                 </p>
               </div>
@@ -223,7 +252,10 @@ const UserDetail = () => {
       </div>
 
       {/* Access Table */}
-      <Card title="User Access">
+      <Card>
+        <div className="p-4 border-b">
+          <h2 className="text-lg font-semibold text-gray-900">User Access</h2>
+        </div>
         <Table
           columns={accessColumns}
           data={userAccess}

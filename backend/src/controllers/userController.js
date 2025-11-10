@@ -7,9 +7,10 @@ const getUsers = async (req, res) => {
   try {
     const { page, limit, offset } = getPaginationParams(req.query);
     const { search, status, role, department_id } = req.query;
+    const organizationId = req.user.organization_id || req.user.organizationId;
 
     let whereClause = 'WHERE u.organization_id = $1';
-    const params = [req.user.organization_id];
+    const params = [organizationId];
 
     if (search) {
       params.push(`%${search}%`);
@@ -53,7 +54,7 @@ const getUsers = async (req, res) => {
       FROM users u
       LEFT JOIN departments d ON d.id = u.department_id
       LEFT JOIN users m ON m.id = u.manager_id
-      LEFT JOIN user_access ua ON ua.user_id = u.id
+      LEFT JOIN user_access ua ON ua.user_id = u.id AND ua.is_active = true
       ${whereClause}
       GROUP BY u.id, d.name, m.first_name, m.last_name
       ORDER BY u.created_at DESC
@@ -85,6 +86,7 @@ const getUsers = async (req, res) => {
 const getUser = async (req, res) => {
   try {
     const { id } = req.params;
+    const organizationId = req.user.organization_id || req.user.organizationId;
 
     const userQuery = `
       SELECT 
@@ -92,20 +94,20 @@ const getUser = async (req, res) => {
         d.name as department_name,
         m.first_name || ' ' || m.last_name as manager_name,
         o.name as organization_name,
-        COUNT(DISTINCT ua.id) as active_access_count,
-        COUNT(DISTINCT sv.id) as sod_violation_count,
+        COUNT(DISTINCT ua.id) FILTER (WHERE ua.is_active = true) as active_access_count,
+        COUNT(DISTINCT sv.id) FILTER (WHERE sv.is_resolved = false) as sod_violation_count,
         COALESCE(AVG(ua.risk_score), 0) as risk_score
       FROM users u
       LEFT JOIN departments d ON d.id = u.department_id
       LEFT JOIN users m ON m.id = u.manager_id
       LEFT JOIN organizations o ON o.id = u.organization_id
       LEFT JOIN user_access ua ON ua.user_id = u.id
-      LEFT JOIN sod_violations sv ON sv.user_id = u.id AND sv.status = 'active'
+      LEFT JOIN sod_violations sv ON sv.user_id = u.id
       WHERE u.id = $1 AND u.organization_id = $2
       GROUP BY u.id, d.name, m.first_name, m.last_name, o.name
     `;
 
-    const result = await query(userQuery, [id, req.user.organization_id]);
+    const result = await query(userQuery, [id, organizationId]);
 
     if (result.rows.length === 0) {
       return errorResponse(res, 'User not found', 404);
@@ -136,10 +138,12 @@ const createUser = async (req, res) => {
       hire_date
     } = req.body;
 
+    const organizationId = req.user.organization_id || req.user.organizationId;
+
     // Check if user already exists
     const existingUser = await query(
-      'SELECT id FROM users WHERE email = $1',
-      [email.toLowerCase()]
+      'SELECT id FROM users WHERE email = $1 AND organization_id = $2',
+      [email.toLowerCase(), organizationId]
     );
 
     if (existingUser.rows.length > 0) {
@@ -151,7 +155,7 @@ const createUser = async (req, res) => {
     if (department_name) {
       const dept = await query(
         'SELECT id FROM departments WHERE name = $1 AND organization_id = $2',
-        [department_name, req.user.organization_id]
+        [department_name, organizationId]
       );
       
       if (dept.rows.length > 0) {
@@ -159,7 +163,7 @@ const createUser = async (req, res) => {
       } else {
         const newDept = await query(
           'INSERT INTO departments (organization_id, name) VALUES ($1, $2) RETURNING id',
-          [req.user.organization_id, department_name]
+          [organizationId, department_name]
         );
         departmentId = newDept.rows[0].id;
       }
@@ -177,7 +181,7 @@ const createUser = async (req, res) => {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *`,
       [
-        req.user.organization_id,
+        organizationId,
         employee_id,
         first_name,
         last_name,
@@ -218,12 +222,14 @@ const updateUser = async (req, res) => {
       hire_date
     } = req.body;
 
+    const organizationId = req.user.organization_id || req.user.organizationId;
+
     // Find or create department
     let departmentId = null;
     if (department_name) {
       const dept = await query(
         'SELECT id FROM departments WHERE name = $1 AND organization_id = $2',
-        [department_name, req.user.organization_id]
+        [department_name, organizationId]
       );
       
       if (dept.rows.length > 0) {
@@ -231,7 +237,7 @@ const updateUser = async (req, res) => {
       } else {
         const newDept = await query(
           'INSERT INTO departments (organization_id, name) VALUES ($1, $2) RETURNING id',
-          [req.user.organization_id, department_name]
+          [organizationId, department_name]
         );
         departmentId = newDept.rows[0].id;
       }
@@ -262,7 +268,7 @@ const updateUser = async (req, res) => {
         departmentId,
         hire_date,
         id,
-        req.user.organization_id
+        organizationId
       ]
     );
 
@@ -283,13 +289,14 @@ const updateUser = async (req, res) => {
 const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
+    const organizationId = req.user.organization_id || req.user.organizationId;
 
     const result = await query(
       `UPDATE users 
        SET status = 'terminated', updated_at = CURRENT_TIMESTAMP
        WHERE id = $1 AND organization_id = $2
        RETURNING id`,
-      [id, req.user.organization_id]
+      [id, organizationId]
     );
 
     if (result.rows.length === 0) {
@@ -307,10 +314,14 @@ const deleteUser = async (req, res) => {
 const getUserAccess = async (req, res) => {
   try {
     const { id } = req.params;
+    const organizationId = req.user.organization_id || req.user.organizationId;
 
     const accessQuery = `
       SELECT 
-        ua.*,
+        ua.id,
+        ua.granted_date as grant_date,
+        ua.last_used_date,
+        ua.risk_score,
         a.name as application_name,
         a.code as application_code,
         r.name as role_name,
@@ -322,12 +333,13 @@ const getUserAccess = async (req, res) => {
         END as usage_status
       FROM user_access ua
       JOIN applications a ON a.id = ua.application_id
-      LEFT JOIN application_roles r ON r.id = ua.role_id
-      WHERE ua.user_id = $1 AND ua.organization_id = $2
+      LEFT JOIN roles r ON r.id = ua.role_id
+      WHERE ua.user_id = $1 
+        AND ua.is_active = true
       ORDER BY a.name, r.name
     `;
 
-    const result = await query(accessQuery, [id, req.user.organization_id]);
+    const result = await query(accessQuery, [id]);
 
     return successResponse(res, result.rows);
   } catch (error) {

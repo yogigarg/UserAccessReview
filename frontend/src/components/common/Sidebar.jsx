@@ -10,6 +10,7 @@ import {
   HiExclamationCircle,
   HiChevronDown,
   HiChevronRight,
+  HiViewGrid,
 } from 'react-icons/hi'
 import { useAuth } from '../../context/AuthContext'
 
@@ -20,6 +21,7 @@ const Sidebar = () => {
   const menuItems = [
     { name: 'Dashboard', path: '/dashboard', icon: HiHome },
     { name: 'Users', path: '/users', icon: HiUsers, adminOnly: true },
+    { name: 'Applications', path: '/applications', icon: HiViewGrid, adminOnly: true },
     { name: 'Campaigns', path: '/campaigns', icon: HiClipboardList, adminOnly: true },
     { name: 'Reviews', path: '/reviews', icon: HiCheckCircle },
     { name: 'Reports', path: '/reports', icon: HiChartBar, adminOnly: true },

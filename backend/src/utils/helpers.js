@@ -51,13 +51,45 @@ const sanitizeUser = (user) => {
   return sanitizedUser;
 };
 
-// Pagination helper
+// Pagination helpers
 const getPaginationParams = (query) => {
   const page = parseInt(query.page) || 1;
   const limit = parseInt(query.limit) || 10;
   const offset = (page - 1) * limit;
   
   return { page, limit, offset };
+};
+
+// Alternative pagination helper (used by controllers like sodController)
+const getPagination = (page = 1, limit = 10) => {
+  const pageNum = parseInt(page) || 1;
+  const limitNum = parseInt(limit) || 10;
+  const offset = (pageNum - 1) * limitNum;
+  
+  return { 
+    limit: limitNum, 
+    offset,
+    page: pageNum 
+  };
+};
+
+// Build pagination response with data and metadata
+const buildPaginationResponse = (data, page, limit, total) => {
+  const pageNum = parseInt(page) || 1;
+  const limitNum = parseInt(limit) || 10;
+  const totalPages = Math.ceil(total / limitNum);
+
+  return {
+    data,
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total: parseInt(total),
+      totalPages,
+      hasMore: pageNum < totalPages,
+      hasPrevious: pageNum > 1,
+    },
+  };
 };
 
 module.exports = {
@@ -69,4 +101,6 @@ module.exports = {
   verifyToken,
   sanitizeUser,
   getPaginationParams,
+  getPagination,
+  buildPaginationResponse,
 };

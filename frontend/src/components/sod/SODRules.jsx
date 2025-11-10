@@ -51,17 +51,27 @@ const SODRules = () => {
   const loadRules = async () => {
     try {
       setLoading(true)
-      // Replace with actual API call
       const response = await fetch('/api/v1/sod/rules', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       })
       const data = await response.json()
-      setRules(data.data || [])
+      
+      // Handle nested response structure
+      let rulesData = []
+      if (data.data && data.data.data) {
+        rulesData = data.data.data
+      } else if (data.data) {
+        rulesData = Array.isArray(data.data) ? data.data : []
+      }
+      
+      console.log('Rules loaded:', rulesData)
+      setRules(rulesData)
     } catch (error) {
       console.error('Load rules error:', error)
       toast.error('Failed to load SOD rules')
+      setRules([])
     } finally {
       setLoading(false)
     }
@@ -69,7 +79,6 @@ const SODRules = () => {
 
   const loadStats = async () => {
     try {
-      // Load stats for dashboard cards
       const response = await fetch('/api/v1/sod/violations', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -77,16 +86,27 @@ const SODRules = () => {
       })
       const data = await response.json()
       
-      // Calculate stats from violations
-      const violations = data.data || []
+      let violationsData = []
+      if (data.data && data.data.data) {
+        violationsData = data.data.data
+      } else if (data.data) {
+        violationsData = Array.isArray(data.data) ? data.data : []
+      }
+      
       setStats({
         totalRules: rules.length,
         activeRules: rules.filter(r => r.is_active).length,
-        totalViolations: violations.length,
-        criticalViolations: violations.filter(v => v.severity === 'critical').length,
+        totalViolations: violationsData.length,
+        criticalViolations: violationsData.filter(v => v.severity === 'critical' && !v.is_resolved).length,
       })
     } catch (error) {
       console.error('Load stats error:', error)
+      setStats({
+        totalRules: rules.length,
+        activeRules: rules.filter(r => r.is_active).length,
+        totalViolations: 0,
+        criticalViolations: 0,
+      })
     }
   }
 
@@ -139,7 +159,11 @@ const SODRules = () => {
         body: JSON.stringify(formData)
       })
 
-      if (!response.ok) throw new Error('Failed to save rule')
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to save rule')
+      }
 
       toast.success(editingRule ? 'Rule updated successfully' : 'Rule created successfully')
       setShowModal(false)
@@ -147,7 +171,7 @@ const SODRules = () => {
       loadStats()
     } catch (error) {
       console.error('Save rule error:', error)
-      toast.error('Failed to save rule')
+      toast.error(error.message || 'Failed to save rule')
     }
   }
 
@@ -162,14 +186,18 @@ const SODRules = () => {
         }
       })
 
-      if (!response.ok) throw new Error('Failed to delete rule')
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to delete rule')
+      }
 
       toast.success('Rule deleted successfully')
       loadRules()
       loadStats()
     } catch (error) {
       console.error('Delete rule error:', error)
-      toast.error('Failed to delete rule')
+      toast.error(error.message || 'Failed to delete rule')
     }
   }
 
@@ -197,7 +225,7 @@ const SODRules = () => {
       header: 'Process Area',
       accessor: 'process_area',
       cell: (row) => (
-        <span className="text-gray-800">{row.process_area}</span>
+        <span className="text-gray-900">{row.process_area}</span>
       ),
     },
     {
@@ -209,15 +237,15 @@ const SODRules = () => {
       header: 'Active Violations',
       accessor: 'active_violation_count',
       cell: (row) => (
-        <div className="flex items-center">
+        <div className="flex items-center gap-1">
           {row.active_violation_count > 0 ? (
             <>
-              <HiExclamationCircle className="h-5 w-5 text-red-500 mr-1" />
+              <HiExclamationCircle className="h-5 w-5 text-red-500" />
               <span className="text-red-600 font-semibold">{row.active_violation_count}</span>
             </>
           ) : (
             <>
-              <HiCheckCircle className="h-5 w-5 text-green-500 mr-1" />
+              <HiCheckCircle className="h-5 w-5 text-green-500" />
               <span className="text-green-600">0</span>
             </>
           )}
@@ -236,30 +264,56 @@ const SODRules = () => {
     {
       header: 'Actions',
       cell: (row) => (
-        <div className="flex space-x-2">
+        <div className="flex gap-2">
           <Button
-            variant="secondary"
+            variant="ghost"
             size="sm"
-            onClick={() => handleEdit(row)}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleEdit(row)
+            }}
           >
             <HiPencil className="h-4 w-4" />
           </Button>
           <Button
-            variant="danger"
+            variant="ghost"
             size="sm"
-            onClick={() => handleDelete(row.id)}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleDelete(row.id)
+            }}
           >
-            <HiTrash className="h-4 w-4" />
+            <HiTrash className="h-4 w-4 text-red-500" />
           </Button>
         </div>
       ),
     },
   ]
 
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Segregation of Duties Rules
+            </h1>
+            <p className="text-gray-600">
+              Define and manage SOD rules to prevent toxic role combinations
+            </p>
+          </div>
+        </div>
+        <Card>
+          <Loader />
+        </Card>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Segregation of Duties Rules
@@ -268,8 +322,7 @@ const SODRules = () => {
             Define and manage SOD rules to prevent toxic role combinations
           </p>
         </div>
-        <Button variant="primary" onClick={handleCreate}>
-          <HiPlus className="h-5 w-5 mr-2" />
+        <Button variant="primary" icon={HiPlus} onClick={handleCreate}>
           Create Rule
         </Button>
       </div>
@@ -297,36 +350,12 @@ const SODRules = () => {
       )}
 
       {/* Rules Table */}
-      {loading ? (
-        <Card>
-          <div className="flex items-center justify-center py-12">
-            <Loader />
-            <span className="ml-3 text-gray-600">Loading rules...</span>
-          </div>
-        </Card>
-      ) : rules.length === 0 ? (
-        <Card>
-          <div className="text-center py-12">
-            <HiExclamationCircle className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-lg font-medium text-gray-900">No SOD Rules</h3>
-            <p className="mt-1 text-gray-500">
-              Get started by creating your first SOD rule
-            </p>
-            <Button variant="primary" onClick={handleCreate} className="mt-4">
-              <HiPlus className="h-5 w-5 mr-2" />
-              Create First Rule
-            </Button>
-          </div>
-        </Card>
-      ) : (
-        <div className="bg-white rounded-lg shadow">
-          <Table
-            columns={columns}
-            data={rules}
-            emptyMessage="No SOD rules found"
-          />
-        </div>
-      )}
+      <Table
+        columns={columns}
+        data={rules}
+        loading={loading}
+        emptyMessage="No SOD rules found"
+      />
 
       {/* Create/Edit Modal */}
       <Modal
@@ -334,21 +363,11 @@ const SODRules = () => {
         onClose={() => setShowModal(false)}
         title={editingRule ? 'Edit SOD Rule' : 'Create SOD Rule'}
         size="large"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setShowModal(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleSubmit}>
-              {editingRule ? 'Update' : 'Create'} Rule
-            </Button>
-          </>
-        }
       >
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Rule Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Rule Name *
             </label>
             <input
@@ -363,7 +382,7 @@ const SODRules = () => {
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Description
             </label>
             <textarea
@@ -377,7 +396,7 @@ const SODRules = () => {
           {/* Process Area & Severity */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Process Area *
               </label>
               <select
@@ -394,7 +413,7 @@ const SODRules = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Severity *
               </label>
               <select
@@ -414,7 +433,7 @@ const SODRules = () => {
 
           {/* Conflicting Roles */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <label className="block text-sm font-medium text-gray-900 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Conflicting Roles
             </label>
             <p className="text-sm text-gray-600 mb-3">
@@ -427,9 +446,7 @@ const SODRules = () => {
                 conflictingRoles: e.target.value.split('\n').filter(r => r.trim()) 
               })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px]"
-              placeholder="Enter one role per line, e.g.:
-Purchase_Order_Creator
-Payment_Approver"
+              placeholder="Enter one role per line, e.g.:&#10;Purchase_Order_Creator&#10;Payment_Approver"
             />
           </div>
 
@@ -442,7 +459,7 @@ Payment_Approver"
                 onChange={(e) => setFormData({ ...formData, autoRemediate: e.target.checked })}
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
-              <span className="ml-2 text-sm text-gray-900">
+              <span className="ml-2 text-sm text-gray-700">
                 Auto-remediate violations (automatically revoke conflicting access)
               </span>
             </label>
@@ -454,10 +471,20 @@ Payment_Approver"
                 onChange={(e) => setFormData({ ...formData, requiresExceptionApproval: e.target.checked })}
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
-              <span className="ml-2 text-sm text-gray-900">
+              <span className="ml-2 text-sm text-gray-700">
                 Require exception approval for violations
               </span>
             </label>
+          </div>
+
+          {/* Form Actions */}
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <Button variant="secondary" onClick={() => setShowModal(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit">
+              {editingRule ? 'Update' : 'Create'} Rule
+            </Button>
           </div>
         </form>
       </Modal>

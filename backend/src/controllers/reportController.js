@@ -9,22 +9,44 @@ const generateCampaignReport = async (req, res) => {
   try {
     const { id } = req.params;
     const { format = 'json' } = req.query;
+    const organizationId = req.user.organization_id || req.user.organizationId;
 
-    // Use the stored procedure to generate report
-    const result = await query(
-      'SELECT generate_campaign_report($1) as report_data',
-      [id]
+    // Get campaign details
+    const campaignResult = await query(
+      `SELECT c.*, 
+              u.first_name || ' ' || u.last_name as created_by_name
+       FROM campaigns c
+       LEFT JOIN users u ON u.id = c.created_by
+       WHERE c.id = $1 AND c.organization_id = $2`,
+      [id, organizationId]
     );
 
-    if (!result.rows[0].report_data) {
+    if (campaignResult.rows.length === 0) {
       return errorResponse(res, 'Campaign not found', 404);
     }
 
-    const reportData = result.rows[0].report_data;
+    const campaign = campaignResult.rows[0];
+
+    // Get review items summary
+    const reviewSummary = await query(
+      `SELECT 
+        COUNT(*) as total_reviews,
+        COUNT(*) FILTER (WHERE decision = 'approved') as approved,
+        COUNT(*) FILTER (WHERE decision = 'revoked') as revoked,
+        COUNT(*) FILTER (WHERE decision = 'exception') as exceptions,
+        COUNT(*) FILTER (WHERE decision = 'pending') as pending
+       FROM review_items
+       WHERE campaign_id = $1`,
+      [id]
+    );
+
+    const reportData = {
+      campaign,
+      summary: reviewSummary.rows[0],
+    };
 
     // If format is CSV, convert to CSV (simplified)
     if (format === 'csv') {
-      // This is a placeholder - in production, use a proper CSV library
       return res
         .header('Content-Type', 'text/csv')
         .header('Content-Disposition', `attachment; filename="campaign-report-${id}.csv"`)
@@ -32,11 +54,15 @@ const generateCampaignReport = async (req, res) => {
     }
 
     // Log report generation
-    await query(
-      `INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [req.user.organizationId, req.user.userId, 'export', 'campaign_report', id]
-    );
+    try {
+      await query(
+        `INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [organizationId, req.user.id || req.user.userId, 'export', 'campaign_report', id]
+      );
+    } catch (auditError) {
+      logger.error('Audit log failed:', auditError);
+    }
 
     return successResponse(res, reportData, 'Report generated successfully');
 
@@ -51,24 +77,61 @@ const generateCampaignReport = async (req, res) => {
 // @access  Private/Admin/ComplianceManager
 const getSODViolationsReport = async (req, res) => {
   try {
-    const result = await query(
-      'SELECT * FROM get_sod_violations_report($1)',
-      [req.user.organizationId]
+    const organizationId = req.user.organization_id || req.user.organizationId;
+
+    // Get summary by severity
+    const summaryResult = await query(
+      `SELECT 
+        sr.severity,
+        COUNT(DISTINCT sr.id) as total_rules,
+        COUNT(sv.id) as total_violations,
+        COUNT(sv.id) FILTER (WHERE sv.is_resolved = false) as unresolved,
+        COUNT(sv.id) FILTER (WHERE sv.is_resolved = true) as resolved
+       FROM sod_rules sr
+       LEFT JOIN sod_violations sv ON sv.rule_id = sr.id
+       WHERE sr.organization_id = $1 AND sr.is_active = true
+       GROUP BY sr.severity
+       ORDER BY 
+         CASE sr.severity 
+           WHEN 'critical' THEN 1
+           WHEN 'high' THEN 2
+           WHEN 'medium' THEN 3
+           WHEN 'low' THEN 4
+         END`,
+      [organizationId]
     );
 
     // Get detailed violations
-    const detailedViolations = await query(
-      `SELECT * FROM v_sod_violations_detail
-       WHERE department_name IN (
-         SELECT d.name FROM departments d WHERE d.organization_id = $1
-       )
-       ORDER BY detected_at DESC`,
-      [req.user.organizationId]
+    const violationsResult = await query(
+      `SELECT 
+        sv.id,
+        sv.rule_id,
+        sv.user_id,
+        sv.detected_at,
+        sv.resolved_at,
+        sv.is_resolved,
+        sv.resolution_action,
+        sr.name as rule_name,
+        sr.severity,
+        sr.process_area,
+        sr.conflicting_roles,
+        u.first_name || ' ' || u.last_name as user_name,
+        u.email as user_email,
+        u.employee_id,
+        d.name as department_name
+       FROM sod_violations sv
+       JOIN sod_rules sr ON sr.id = sv.rule_id
+       JOIN users u ON u.id = sv.user_id
+       LEFT JOIN departments d ON d.id = u.department_id
+       WHERE sr.organization_id = $1
+       ORDER BY sv.detected_at DESC
+       LIMIT 100`,
+      [organizationId]
     );
 
     return successResponse(res, {
-      summary: result.rows,
-      violations: detailedViolations.rows,
+      summary: summaryResult.rows,
+      violations: violationsResult.rows,
     });
 
   } catch (error) {
@@ -83,10 +146,33 @@ const getSODViolationsReport = async (req, res) => {
 const getDormantAccountsReport = async (req, res) => {
   try {
     const { daysInactive = 90 } = req.query;
+    const organizationId = req.user.organization_id || req.user.organizationId;
 
     const result = await query(
-      'SELECT * FROM get_dormant_accounts_report($1, $2)',
-      [req.user.organizationId, daysInactive]
+      `SELECT 
+        u.id,
+        u.employee_id,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.status,
+        u.last_login_at,
+        d.name as department_name,
+        (SELECT COUNT(*) FROM user_access WHERE user_id = u.id AND is_active = true) as active_access_count,
+        CASE 
+          WHEN u.last_login_at IS NULL THEN 999999
+          ELSE EXTRACT(DAY FROM (CURRENT_TIMESTAMP - u.last_login_at))::INTEGER
+        END as days_since_login
+       FROM users u
+       LEFT JOIN departments d ON d.id = u.department_id
+       WHERE u.organization_id = $1
+         AND u.status = 'active'
+         AND (
+           u.last_login_at IS NULL 
+           OR u.last_login_at < CURRENT_TIMESTAMP - INTERVAL '1 day' * $2
+         )
+       ORDER BY days_since_login DESC`,
+      [organizationId, daysInactive]
     );
 
     return successResponse(res, result.rows);
@@ -103,9 +189,10 @@ const getDormantAccountsReport = async (req, res) => {
 const getRecertificationSummary = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
+    const organizationId = req.user.organization_id || req.user.organizationId;
 
     let dateFilter = '';
-    const params = [req.user.organizationId];
+    const params = [organizationId];
 
     if (startDate && endDate) {
       dateFilter = 'AND c.start_date >= $2 AND c.end_date <= $3';
@@ -116,11 +203,11 @@ const getRecertificationSummary = async (req, res) => {
       `SELECT 
         COUNT(DISTINCT c.id) as total_campaigns,
         COUNT(DISTINCT c.id) FILTER (WHERE c.status = 'completed') as completed_campaigns,
-        SUM(c.total_reviews) as total_reviews,
-        SUM(c.completed_reviews) as completed_reviews,
-        SUM(c.approved_count) as total_approved,
-        SUM(c.revoked_count) as total_revoked,
-        SUM(c.exception_count) as total_exceptions,
+        COALESCE(SUM(c.total_reviews), 0) as total_reviews,
+        COALESCE(SUM(c.completed_reviews), 0) as completed_reviews,
+        COALESCE(SUM(c.approved_count), 0) as total_approved,
+        COALESCE(SUM(c.revoked_count), 0) as total_revoked,
+        COALESCE(SUM(c.exception_count), 0) as total_exceptions,
         ROUND(AVG(c.completion_percentage), 2) as avg_completion_rate
        FROM campaigns c
        WHERE c.organization_id = $1 ${dateFilter}`,
@@ -156,6 +243,7 @@ const getRecertificationSummary = async (req, res) => {
 const getUserAccessReport = async (req, res) => {
   try {
     const { userId } = req.params;
+    const organizationId = req.user.organization_id || req.user.organizationId;
 
     // Get user details
     const userResult = await query(
@@ -165,7 +253,7 @@ const getUserAccessReport = async (req, res) => {
        LEFT JOIN departments d ON d.id = u.department_id
        LEFT JOIN users m ON m.id = u.manager_id
        WHERE u.id = $1 AND u.organization_id = $2`,
-      [userId, req.user.organizationId]
+      [userId, organizationId]
     );
 
     if (userResult.rows.length === 0) {
@@ -176,7 +264,19 @@ const getUserAccessReport = async (req, res) => {
 
     // Get user's access
     const accessResult = await query(
-      `SELECT * FROM v_active_user_access WHERE user_id = $1`,
+      `SELECT 
+        ua.id,
+        ua.granted_date,
+        ua.last_reviewed_date,
+        a.name as application_name,
+        a.code as application_code,
+        r.name as role_name,
+        r.description as role_description
+       FROM user_access ua
+       JOIN applications a ON a.id = ua.application_id
+       LEFT JOIN roles r ON r.id = ua.role_id
+       WHERE ua.user_id = $1 AND ua.is_active = true
+       ORDER BY a.name, r.name`,
       [userId]
     );
 
@@ -203,7 +303,7 @@ const getUserAccessReport = async (req, res) => {
       [userId]
     );
 
-    // Get risk profile
+    // Get risk profile if exists
     const riskProfile = await query(
       'SELECT * FROM risk_profiles WHERE user_id = $1',
       [userId]
@@ -229,38 +329,39 @@ const getUserAccessReport = async (req, res) => {
 const getAuditLogReport = async (req, res) => {
   try {
     const { startDate, endDate, action, userId, entityType, limit = 100 } = req.query;
+    const organizationId = req.user.organization_id || req.user.organizationId;
 
-    let whereConditions = ['organization_id = $1'];
-    const params = [req.user.organizationId];
+    let whereConditions = ['al.organization_id = $1'];
+    const params = [organizationId];
     let paramCount = 1;
 
     if (startDate) {
       paramCount++;
-      whereConditions.push(`created_at >= $${paramCount}`);
+      whereConditions.push(`al.created_at >= $${paramCount}`);
       params.push(startDate);
     }
 
     if (endDate) {
       paramCount++;
-      whereConditions.push(`created_at <= $${paramCount}`);
+      whereConditions.push(`al.created_at <= $${paramCount}`);
       params.push(endDate);
     }
 
     if (action) {
       paramCount++;
-      whereConditions.push(`action = $${paramCount}`);
+      whereConditions.push(`al.action = $${paramCount}`);
       params.push(action);
     }
 
     if (userId) {
       paramCount++;
-      whereConditions.push(`user_id = $${paramCount}`);
+      whereConditions.push(`al.user_id = $${paramCount}`);
       params.push(userId);
     }
 
     if (entityType) {
       paramCount++;
-      whereConditions.push(`entity_type = $${paramCount}`);
+      whereConditions.push(`al.entity_type = $${paramCount}`);
       params.push(entityType);
     }
 
@@ -295,22 +396,28 @@ const getAuditLogReport = async (req, res) => {
 const exportReport = async (req, res) => {
   try {
     const { reportType, filters, format = 'json' } = req.body;
+    const organizationId = req.user.organization_id || req.user.organizationId;
+    const userId = req.user.id || req.user.userId;
 
     // This is a placeholder for report export functionality
     // In production, you would generate PDF/Excel reports here
 
     // Log export
-    await query(
-      `INSERT INTO audit_logs (organization_id, user_id, action, entity_type, metadata)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [
-        req.user.organizationId,
-        req.user.userId,
-        'export',
-        'report',
-        JSON.stringify({ report_type: reportType, format })
-      ]
-    );
+    try {
+      await query(
+        `INSERT INTO audit_logs (organization_id, user_id, action, entity_type, metadata)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          organizationId,
+          userId,
+          'export',
+          'report',
+          JSON.stringify({ report_type: reportType, format })
+        ]
+      );
+    } catch (auditError) {
+      logger.error('Audit log failed:', auditError);
+    }
 
     return successResponse(res, {
       message: 'Report export initiated',

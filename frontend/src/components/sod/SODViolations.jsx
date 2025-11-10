@@ -50,10 +50,21 @@ const SODViolations = () => {
         }
       })
       const data = await response.json()
-      setViolations(data.data || [])
+      
+      // Handle nested response structure
+      let violationsData = []
+      if (data.data && data.data.data) {
+        violationsData = data.data.data
+      } else if (data.data) {
+        violationsData = Array.isArray(data.data) ? data.data : []
+      }
+      
+      console.log('Violations loaded:', violationsData)
+      setViolations(violationsData)
     } catch (error) {
       console.error('Load violations error:', error)
       toast.error('Failed to load violations')
+      setViolations([])
     } finally {
       setLoading(false)
     }
@@ -67,7 +78,16 @@ const SODViolations = () => {
         }
       })
       const data = await response.json()
-      const allViolations = data.data || []
+      
+      // Handle nested response structure
+      let allViolations = []
+      if (data.data && data.data.data) {
+        allViolations = data.data.data
+      } else if (data.data) {
+        allViolations = Array.isArray(data.data) ? data.data : []
+      }
+
+      console.log('Violations for stats:', allViolations)
 
       setStats({
         total: allViolations.length,
@@ -77,10 +97,17 @@ const SODViolations = () => {
       })
     } catch (error) {
       console.error('Load stats error:', error)
+      setStats({
+        total: 0,
+        unresolved: 0,
+        critical: 0,
+        resolved: 0,
+      })
     }
   }
 
-  const handleResolve = (violation) => {
+  const handleResolve = (violation, e) => {
+    e.stopPropagation()
     setSelectedViolation(violation)
     setResolutionData({
       resolutionAction: '',
@@ -113,7 +140,11 @@ const SODViolations = () => {
         body: JSON.stringify(resolutionData)
       })
 
-      if (!response.ok) throw new Error('Failed to resolve violation')
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to resolve violation')
+      }
 
       toast.success('Violation resolved successfully')
       setShowResolveModal(false)
@@ -121,7 +152,7 @@ const SODViolations = () => {
       loadStats()
     } catch (error) {
       console.error('Resolve violation error:', error)
-      toast.error('Failed to resolve violation')
+      toast.error(error.message || 'Failed to resolve violation')
     }
   }
 
@@ -164,20 +195,23 @@ const SODViolations = () => {
     },
     {
       header: 'Conflicting Roles',
-      cell: (row) => (
-        <div className="space-y-1">
-          {JSON.parse(row.conflicting_roles || '[]').slice(0, 2).map((role, idx) => (
-            <div key={idx} className="text-sm text-gray-700 bg-gray-100 px-2 py-1 rounded">
-              {role}
-            </div>
-          ))}
-          {JSON.parse(row.conflicting_roles || '[]').length > 2 && (
-            <span className="text-xs text-gray-500">
-              +{JSON.parse(row.conflicting_roles || '[]').length - 2} more
-            </span>
-          )}
-        </div>
-      ),
+      cell: (row) => {
+        const roles = JSON.parse(row.conflicting_roles || '[]')
+        return (
+          <div className="space-y-1">
+            {roles.slice(0, 2).map((role, idx) => (
+              <div key={idx} className="text-sm text-gray-800 bg-gray-100 px-2 py-1 rounded">
+                {role}
+              </div>
+            ))}
+            {roles.length > 2 && (
+              <span className="text-xs text-gray-500">
+                +{roles.length - 2} more
+              </span>
+            )}
+          </div>
+        )
+      },
     },
     {
       header: 'Severity',
@@ -189,9 +223,9 @@ const SODViolations = () => {
       cell: (row) => {
         const days = getDaysOpen(row.detected_at)
         return (
-          <div className="flex items-center">
-            <HiClock className={`h-4 w-4 mr-1 ${days > 30 ? 'text-red-500' : 'text-gray-500'}`} />
-            <span className={days > 30 ? 'text-red-600 font-semibold' : 'text-gray-700'}>
+          <div className="flex items-center gap-1">
+            <HiClock className={`h-4 w-4 ${days > 30 ? 'text-red-500' : 'text-gray-500'}`} />
+            <span className={days > 30 ? 'text-red-600 font-semibold' : 'text-gray-900'}>
               {days} days
             </span>
           </div>
@@ -219,34 +253,53 @@ const SODViolations = () => {
     {
       header: 'Actions',
       cell: (row) => (
-        <div>
-          {!row.is_resolved && (
+        <div className="flex gap-2">
+          {!row.is_resolved ? (
             <Button
               variant="primary"
               size="sm"
-              onClick={() => handleResolve(row)}
+              onClick={(e) => handleResolve(row, e)}
             >
               Resolve
             </Button>
-          )}
-          {row.is_resolved && (
-            <p className="text-xs text-gray-600">
-              {row.resolution_action}
-            </p>
+          ) : (
+            <span className="text-xs text-gray-600 capitalize">
+              {row.resolution_action?.replace('_', ' ')}
+            </span>
           )}
         </div>
       ),
     },
   ]
 
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">SOD Violations</h1>
+            <p className="text-gray-600">
+              Monitor and resolve segregation of duties conflicts
+            </p>
+          </div>
+        </div>
+        <Card>
+          <Loader />
+        </Card>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">SOD Violations</h1>
-        <p className="text-gray-600">
-          Monitor and resolve segregation of duties conflicts
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">SOD Violations</h1>
+          <p className="text-gray-600">
+            Monitor and resolve segregation of duties conflicts
+          </p>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -319,50 +372,18 @@ const SODViolations = () => {
       </Card>
 
       {/* Violations Table */}
-      {loading ? (
-        <Card>
-          <div className="flex items-center justify-center py-12">
-            <Loader />
-            <span className="ml-3 text-gray-600">Loading violations...</span>
-          </div>
-        </Card>
-      ) : violations.length === 0 ? (
-        <Card>
-          <div className="text-center py-12">
-            <HiCheckCircle className="mx-auto h-12 w-12 text-green-500" />
-            <h3 className="mt-2 text-lg font-medium text-gray-900">No Violations Found</h3>
-            <p className="mt-1 text-gray-500">
-              {filters.severity || filters.isResolved
-                ? 'No violations match your filters'
-                : 'Great job! No SOD violations detected'}
-            </p>
-          </div>
-        </Card>
-      ) : (
-        <div className="bg-white rounded-lg shadow">
-          <Table
-            columns={columns}
-            data={violations}
-            emptyMessage="No violations found"
-          />
-        </div>
-      )}
+      <Table
+        columns={columns}
+        data={violations}
+        loading={loading}
+        emptyMessage="No violations found"
+      />
 
       {/* Resolve Modal */}
       <Modal
         isOpen={showResolveModal}
         onClose={() => setShowResolveModal(false)}
         title="Resolve SOD Violation"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setShowResolveModal(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleSubmitResolution}>
-              Submit Resolution
-            </Button>
-          </>
-        }
       >
         {selectedViolation && (
           <form onSubmit={handleSubmitResolution} className="space-y-6">
@@ -393,7 +414,7 @@ const SODViolations = () => {
 
             {/* Resolution Action */}
             <div>
-              <label className="block text-sm font-medium text-gray-900 mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-3">
                 Resolution Action *
               </label>
               <div className="grid grid-cols-1 gap-3">
@@ -422,7 +443,7 @@ const SODViolations = () => {
             {/* Exception Expiry (only for exception_granted) */}
             {resolutionData.resolutionAction === 'exception_granted' && (
               <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Exception Expiry Date *
                 </label>
                 <input
@@ -441,7 +462,7 @@ const SODViolations = () => {
 
             {/* Resolution Notes */}
             <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Resolution Notes *
               </label>
               <textarea
@@ -451,6 +472,16 @@ const SODViolations = () => {
                 placeholder="Provide detailed justification for this resolution..."
                 required
               />
+            </div>
+
+            {/* Form Actions */}
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <Button variant="secondary" onClick={() => setShowResolveModal(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" type="submit">
+                Submit Resolution
+              </Button>
             </div>
           </form>
         )}

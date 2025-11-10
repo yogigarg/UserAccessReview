@@ -36,7 +36,9 @@ const UserForm = () => {
   const loadUser = async () => {
     try {
       setLoading(true)
-      const user = await userService.getUser(id)
+      const response = await userService.getUser(id)
+      const user = response.data || response
+      
       setFormData({
         employee_id: user.employee_id || '',
         first_name: user.first_name || '',
@@ -49,6 +51,7 @@ const UserForm = () => {
         hire_date: user.hire_date ? user.hire_date.split('T')[0] : '',
       })
     } catch (error) {
+      console.error('Failed to load user:', error)
       toast.error('Failed to load user')
       navigate('/users')
     } finally {
@@ -78,6 +81,7 @@ const UserForm = () => {
       }
       navigate('/users')
     } catch (error) {
+      console.error('Save user error:', error)
       toast.error(error.response?.data?.message || 'Failed to save user')
     } finally {
       setSubmitting(false)
@@ -85,7 +89,30 @@ const UserForm = () => {
   }
 
   if (loading) {
-    return <Loader fullScreen />
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            icon={HiArrowLeft}
+            onClick={() => navigate('/users')}
+          >
+            Back
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              {isEditMode ? 'Edit User' : 'Add New User'}
+            </h1>
+            <p className="text-gray-600">
+              {isEditMode ? 'Update user information' : 'Create a new user account'}
+            </p>
+          </div>
+        </div>
+        <Card>
+          <Loader />
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -100,10 +127,10 @@ const UserForm = () => {
           Back
         </Button>
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
             {isEditMode ? 'Edit User' : 'Add New User'}
           </h1>
-          <p className="text-white/70">
+          <p className="text-gray-600">
             {isEditMode ? 'Update user information' : 'Create a new user account'}
           </p>
         </div>
@@ -114,74 +141,109 @@ const UserForm = () => {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Employee ID */}
-            <Input
-              label="Employee ID *"
-              name="employee_id"
-              value={formData.employee_id}
-              onChange={handleChange}
-              placeholder="EMP001"
-              required
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Employee ID *
+              </label>
+              <input
+                type="text"
+                name="employee_id"
+                value={formData.employee_id}
+                onChange={handleChange}
+                placeholder="EMP001"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
 
             {/* Email */}
-            <Input
-              label="Email Address *"
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="user@acme.com"
-              required
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email Address *
+              </label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="user@acme.com"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
 
             {/* First Name */}
-            <Input
-              label="First Name *"
-              name="first_name"
-              value={formData.first_name}
-              onChange={handleChange}
-              placeholder="John"
-              required
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                First Name *
+              </label>
+              <input
+                type="text"
+                name="first_name"
+                value={formData.first_name}
+                onChange={handleChange}
+                placeholder="John"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
 
             {/* Last Name */}
-            <Input
-              label="Last Name *"
-              name="last_name"
-              value={formData.last_name}
-              onChange={handleChange}
-              placeholder="Doe"
-              required
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Last Name *
+              </label>
+              <input
+                type="text"
+                name="last_name"
+                value={formData.last_name}
+                onChange={handleChange}
+                placeholder="Doe"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
 
             {/* Job Title */}
-            <Input
-              label="Job Title"
-              name="job_title"
-              value={formData.job_title}
-              onChange={handleChange}
-              placeholder="Software Engineer"
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Job Title
+              </label>
+              <input
+                type="text"
+                name="job_title"
+                value={formData.job_title}
+                onChange={handleChange}
+                placeholder="Software Engineer"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
 
             {/* Department */}
-            <Input
-              label="Department"
-              name="department_name"
-              value={formData.department_name}
-              onChange={handleChange}
-              placeholder="Engineering"
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Department
+              </label>
+              <input
+                type="text"
+                name="department_name"
+                value={formData.department_name}
+                onChange={handleChange}
+                placeholder="Engineering"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
 
             {/* Role */}
             <div>
-              <label className="block text-sm font-medium text-white mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Role *
               </label>
               <select
                 name="role"
                 value={formData.role}
                 onChange={handleChange}
-                className="input-glass"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               >
                 <option value="user">User</option>
@@ -194,14 +256,14 @@ const UserForm = () => {
 
             {/* Status */}
             <div>
-              <label className="block text-sm font-medium text-white mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Status *
               </label>
               <select
                 name="status"
                 value={formData.status}
                 onChange={handleChange}
-                className="input-glass"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               >
                 <option value="active">Active</option>
@@ -212,17 +274,22 @@ const UserForm = () => {
             </div>
 
             {/* Hire Date */}
-            <Input
-              label="Hire Date"
-              type="date"
-              name="hire_date"
-              value={formData.hire_date}
-              onChange={handleChange}
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Hire Date
+              </label>
+              <input
+                type="date"
+                name="hire_date"
+                value={formData.hire_date}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
 
           {/* Actions */}
-          <div className="flex gap-4 pt-6 border-t border-white/10">
+          <div className="flex gap-4 pt-6 border-t border-gray-200">
             <Button
               type="button"
               variant="secondary"
@@ -234,9 +301,9 @@ const UserForm = () => {
               type="submit"
               variant="primary"
               icon={HiSave}
-              loading={submitting}
+              disabled={submitting}
             >
-              {isEditMode ? 'Update User' : 'Create User'}
+              {submitting ? 'Saving...' : (isEditMode ? 'Update User' : 'Create User')}
             </Button>
           </div>
         </form>
