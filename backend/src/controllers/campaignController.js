@@ -215,15 +215,16 @@ const createCampaign = async (req, res) => {
       campaign_type,
       start_date,
       end_date,
-      reminder_frequency_days = 3
+      reminder_frequency = 3,
+      scope_config = {}
     } = req.body;
 
     const result = await query(
       `INSERT INTO campaigns (
         organization_id, name, description, campaign_type, 
-        start_date, end_date, reminder_frequency_days, 
+        start_date, end_date, reminder_frequency, scope_config,
         status, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *`,
       [
         req.user.organization_id,
@@ -232,7 +233,8 @@ const createCampaign = async (req, res) => {
         campaign_type,
         start_date,
         end_date,
-        reminder_frequency_days,
+        reminder_frequency,
+        JSON.stringify(scope_config),
         'draft',
         req.user.id
       ]
@@ -257,7 +259,8 @@ const updateCampaign = async (req, res) => {
       campaign_type,
       start_date,
       end_date,
-      reminder_frequency_days
+      reminder_frequency,
+      scope_config
     } = req.body;
 
     const result = await query(
@@ -267,11 +270,22 @@ const updateCampaign = async (req, res) => {
            campaign_type = COALESCE($3, campaign_type),
            start_date = COALESCE($4, start_date),
            end_date = COALESCE($5, end_date),
-           reminder_frequency_days = COALESCE($6, reminder_frequency_days),
+           reminder_frequency = COALESCE($6, reminder_frequency),
+           scope_config = COALESCE($7, scope_config),
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $7 AND organization_id = $8
+       WHERE id = $8 AND organization_id = $9
        RETURNING *`,
-      [name, description, campaign_type, start_date, end_date, reminder_frequency_days, id, req.user.organization_id]
+      [
+        name, 
+        description, 
+        campaign_type, 
+        start_date, 
+        end_date, 
+        reminder_frequency, 
+        scope_config ? JSON.stringify(scope_config) : null,
+        id, 
+        req.user.organization_id
+      ]
     );
 
     if (result.rows.length === 0) {
