@@ -10,8 +10,16 @@ const getSODRules = async (req, res) => {
     const { page = 1, limit = 20, severity, isActive } = req.query;
     const { limit: queryLimit, offset } = getPagination(page, limit);
 
+    // Get organization_id from user (try multiple field names)
+    const organizationId = req.user.organization_id || req.user.organizationId;
+    
+    if (!organizationId) {
+      logger.error('Organization ID missing from user token:', req.user);
+      return errorResponse(res, 'Organization ID not found in token', 401);
+    }
+
     let whereConditions = ['organization_id = $1'];
-    const params = [req.user.organization_id];
+    const params = [organizationId];
     let paramCount = 1;
 
     if (severity) {
@@ -70,6 +78,11 @@ const getSODRules = async (req, res) => {
 const getSODRule = async (req, res) => {
   try {
     const { id } = req.params;
+    const organizationId = req.user.organization_id || req.user.organizationId;
+
+    if (!organizationId) {
+      return errorResponse(res, 'Organization ID not found in token', 401);
+    }
 
     const result = await query(
       `SELECT sr.*,
@@ -81,7 +94,7 @@ const getSODRule = async (req, res) => {
        FROM sod_rules sr
        LEFT JOIN sod_rule_templates srt ON srt.id = sr.template_id
        WHERE sr.id = $1 AND sr.organization_id = $2`,
-      [id, req.user.organization_id]
+      [id, organizationId]
     );
 
     if (result.rows.length === 0) {
@@ -113,6 +126,28 @@ const createSODRule = async (req, res) => {
       templateId = null,
     } = req.body;
 
+    // Get organization_id and user_id from token (try multiple field names)
+    const organizationId = req.user.organization_id || req.user.organizationId;
+    const userId = req.user.id || req.user.userId;
+
+    // Debug logging
+    logger.info('Create SOD Rule - User from token:', {
+      raw_user: req.user,
+      organizationId,
+      userId,
+      email: req.user.email
+    });
+
+    if (!organizationId) {
+      logger.error('Organization ID is null/undefined in token:', req.user);
+      return errorResponse(res, 'Organization ID not found in authentication token. Please login again.', 401);
+    }
+
+    if (!userId) {
+      logger.error('User ID is null/undefined in token:', req.user);
+      return errorResponse(res, 'User ID not found in authentication token. Please login again.', 401);
+    }
+
     // Validate severity
     const validSeverities = ['critical', 'high', 'medium', 'low'];
     if (!validSeverities.includes(severity)) {
@@ -127,7 +162,7 @@ const createSODRule = async (req, res) => {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *`,
       [
-        req.user.organization_id,
+        organizationId,
         templateId,
         name,
         description,
@@ -144,21 +179,26 @@ const createSODRule = async (req, res) => {
     const newRule = result.rows[0];
 
     // Log audit
-    await query(
-      `INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id, entity_name, success, ip_address, details)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [
-        req.user.organization_id, 
-        req.user.id, 
-        'create', 
-        'sod_rule', 
-        newRule.id, 
-        name,
-        true,
-        req.ip || req.connection.remoteAddress,
-        JSON.stringify({ severity, process_area: processArea })
-      ]
-    );
+    try {
+      await query(
+        `INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id, entity_name, success, ip_address, details)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          organizationId,
+          userId,
+          'create',
+          'sod_rule',
+          newRule.id,
+          name,
+          true,
+          req.ip || req.connection?.remoteAddress || 'unknown',
+          JSON.stringify({ severity, process_area: processArea })
+        ]
+      );
+    } catch (auditError) {
+      logger.error('Audit log failed:', auditError);
+      // Don't fail the request if audit log fails
+    }
 
     logger.info(`SOD rule created: ${name} by ${req.user.email}`);
 
@@ -166,6 +206,7 @@ const createSODRule = async (req, res) => {
 
   } catch (error) {
     logger.error('Create SOD rule error:', error);
+    logger.error('Request user object:', req.user);
     return errorResponse(res, 'Failed to create SOD rule', 500);
   }
 };
@@ -178,10 +219,17 @@ const updateSODRule = async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
 
+    const organizationId = req.user.organization_id || req.user.organizationId;
+    const userId = req.user.id || req.user.userId;
+
+    if (!organizationId) {
+      return errorResponse(res, 'Organization ID not found in token', 401);
+    }
+
     // Check if rule exists
     const existing = await query(
       'SELECT * FROM sod_rules WHERE id = $1 AND organization_id = $2',
-      [id, req.user.organization_id]
+      [id, organizationId]
     );
 
     if (existing.rows.length === 0) {
@@ -209,7 +257,7 @@ const updateSODRule = async (req, res) => {
 
     Object.keys(updates).forEach(key => {
       const dbColumn = fieldMapping[key];
-      if (!dbColumn) return; // Skip unknown fields
+      if (!dbColumn) return;
 
       paramCount++;
       
@@ -217,7 +265,6 @@ const updateSODRule = async (req, res) => {
         fields.push(`${dbColumn} = $${paramCount}`);
         values.push(JSON.stringify(updates[key]));
       } else if (key === 'severity') {
-        // Validate severity
         const validSeverities = ['critical', 'high', 'medium', 'low'];
         if (validSeverities.includes(updates[key])) {
           fields.push(`${dbColumn} = $${paramCount}`);
@@ -247,21 +294,25 @@ const updateSODRule = async (req, res) => {
     );
 
     // Log audit
-    await query(
-      `INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id, entity_name, success, ip_address, details)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [
-        req.user.organization_id, 
-        req.user.id, 
-        'update', 
-        'sod_rule', 
-        id, 
-        result.rows[0].name,
-        true,
-        req.ip || req.connection.remoteAddress,
-        JSON.stringify(updates)
-      ]
-    );
+    try {
+      await query(
+        `INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id, entity_name, success, ip_address, details)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          organizationId,
+          userId,
+          'update',
+          'sod_rule',
+          id,
+          result.rows[0].name,
+          true,
+          req.ip || req.connection?.remoteAddress || 'unknown',
+          JSON.stringify(updates)
+        ]
+      );
+    } catch (auditError) {
+      logger.error('Audit log failed:', auditError);
+    }
 
     logger.info(`SOD rule updated: ${id} by ${req.user.email}`);
 
@@ -279,37 +330,47 @@ const updateSODRule = async (req, res) => {
 const deleteSODRule = async (req, res) => {
   try {
     const { id } = req.params;
+    const organizationId = req.user.organization_id || req.user.organizationId;
+    const userId = req.user.id || req.user.userId;
+
+    if (!organizationId) {
+      return errorResponse(res, 'Organization ID not found in token', 401);
+    }
 
     const existing = await query(
       'SELECT * FROM sod_rules WHERE id = $1 AND organization_id = $2',
-      [id, req.user.organization_id]
+      [id, organizationId]
     );
 
     if (existing.rows.length === 0) {
       return errorResponse(res, 'SOD rule not found', 404);
     }
 
-    // Soft delete (deactivate)
+    // Soft delete
     await query(
       'UPDATE sod_rules SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
       [id]
     );
 
     // Log audit
-    await query(
-      `INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id, entity_name, success, ip_address)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        req.user.organization_id, 
-        req.user.id, 
-        'delete', 
-        'sod_rule', 
-        id, 
-        existing.rows[0].name,
-        true,
-        req.ip || req.connection.remoteAddress
-      ]
-    );
+    try {
+      await query(
+        `INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id, entity_name, success, ip_address)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          organizationId,
+          userId,
+          'delete',
+          'sod_rule',
+          id,
+          existing.rows[0].name,
+          true,
+          req.ip || req.connection?.remoteAddress || 'unknown'
+        ]
+      );
+    } catch (auditError) {
+      logger.error('Audit log failed:', auditError);
+    }
 
     logger.info(`SOD rule deleted: ${id} by ${req.user.email}`);
 
@@ -329,10 +390,14 @@ const getSODViolations = async (req, res) => {
     const { page = 1, limit = 20, severity, isResolved, userId } = req.query;
     const { limit: queryLimit, offset } = getPagination(page, limit);
 
-    // Note: sod_violations table doesn't have organization_id, 
-    // so we filter through users table
+    const organizationId = req.user.organization_id || req.user.organizationId;
+
+    if (!organizationId) {
+      return errorResponse(res, 'Organization ID not found in token', 401);
+    }
+
     let whereConditions = ['u.organization_id = $1'];
-    const params = [req.user.organization_id];
+    const params = [organizationId];
     let paramCount = 1;
 
     if (severity) {
@@ -367,7 +432,7 @@ const getSODViolations = async (req, res) => {
 
     const total = parseInt(countResult.rows[0].total);
 
-    // Get violations with full details
+    // Get violations with details
     params.push(queryLimit, offset);
     const result = await query(
       `SELECT 
@@ -423,18 +488,25 @@ const resolveSODViolation = async (req, res) => {
     const { id } = req.params;
     const { resolutionAction, resolutionNotes, exceptionExpiry, riskAssessment } = req.body;
 
+    const organizationId = req.user.organization_id || req.user.organizationId;
+    const userId = req.user.id || req.user.userId;
+
+    if (!organizationId) {
+      return errorResponse(res, 'Organization ID not found in token', 401);
+    }
+
     const validActions = ['revoked', 'exception_granted', 'mitigating_control'];
     if (!validActions.includes(resolutionAction)) {
       return errorResponse(res, 'Invalid resolution action', 400);
     }
 
-    // Check if violation exists and belongs to organization
+    // Check if violation exists
     const existing = await query(
       `SELECT sv.*, u.organization_id 
        FROM sod_violations sv
        JOIN users u ON u.id = sv.user_id
        WHERE sv.id = $1 AND u.organization_id = $2`,
-      [id, req.user.organization_id]
+      [id, organizationId]
     );
 
     if (existing.rows.length === 0) {
@@ -454,33 +526,37 @@ const resolveSODViolation = async (req, res) => {
        WHERE id = $6
        RETURNING *`,
       [
-        resolutionAction, 
-        resolutionNotes, 
-        exceptionExpiry, 
-        req.user.id,
+        resolutionAction,
+        resolutionNotes,
+        exceptionExpiry,
+        userId,
         riskAssessment ? JSON.stringify(riskAssessment) : null,
         id
       ]
     );
 
     // Log audit
-    await query(
-      `INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id, new_values, success, ip_address)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        req.user.organization_id,
-        req.user.id,
-        'update',
-        'sod_violation',
-        id,
-        JSON.stringify({ 
-          resolution_action: resolutionAction,
-          exception_expiry: exceptionExpiry 
-        }),
-        true,
-        req.ip || req.connection.remoteAddress
-      ]
-    );
+    try {
+      await query(
+        `INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id, new_values, success, ip_address)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          organizationId,
+          userId,
+          'update',
+          'sod_violation',
+          id,
+          JSON.stringify({
+            resolution_action: resolutionAction,
+            exception_expiry: exceptionExpiry
+          }),
+          true,
+          req.ip || req.connection?.remoteAddress || 'unknown'
+        ]
+      );
+    } catch (auditError) {
+      logger.error('Audit log failed:', auditError);
+    }
 
     logger.info(`SOD violation resolved: ${id} by ${req.user.email}`);
 
@@ -498,18 +574,23 @@ const resolveSODViolation = async (req, res) => {
 const detectUserViolations = async (req, res) => {
   try {
     const { userId } = req.params;
+    const organizationId = req.user.organization_id || req.user.organizationId;
+
+    if (!organizationId) {
+      return errorResponse(res, 'Organization ID not found in token', 401);
+    }
 
     // Verify user belongs to same organization
     const userCheck = await query(
       'SELECT id FROM users WHERE id = $1 AND organization_id = $2',
-      [userId, req.user.organization_id]
+      [userId, organizationId]
     );
 
     if (userCheck.rows.length === 0) {
       return errorResponse(res, 'User not found', 404);
     }
 
-    // Check if detect_sod_violations function exists
+    // Check if function exists
     const result = await query(
       'SELECT * FROM detect_sod_violations($1)',
       [userId]
@@ -519,12 +600,11 @@ const detectUserViolations = async (req, res) => {
 
   } catch (error) {
     logger.error('Detect user violations error:', error);
-    
-    // If function doesn't exist, provide helpful error
+
     if (error.code === '42883') {
       return errorResponse(res, 'SOD detection function not configured. Please contact administrator.', 500);
     }
-    
+
     return errorResponse(res, 'Failed to detect violations', 500);
   }
 };
