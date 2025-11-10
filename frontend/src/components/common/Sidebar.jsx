@@ -73,7 +73,7 @@ const Sidebar = () => {
               >
                 <div className="flex items-center gap-3">
                   <HiShieldCheck className="h-5 w-5" />
-                  <span className="font-medium">Segregation of Duties</span>
+                  <span className="font-medium">SOD</span>
                 </div>
                 {sodMenuOpen ? (
                   <HiChevronDown className="h-4 w-4" />

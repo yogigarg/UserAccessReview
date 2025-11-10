@@ -148,8 +148,8 @@ const ReviewList = () => {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-white mb-2">My Pending Reviews</h1>
-        <p className="text-white/70">Review and certify user access</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">My Pending Reviews</h1>
+        <p className="text-gray-600">Review and certify user access</p>
       </div>
 
       {/* Stats */}
