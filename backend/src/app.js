@@ -16,6 +16,8 @@ const reviewRoutes = require('./routes/reviews');
 const dashboardRoutes = require('./routes/dashboard');
 const reportRoutes = require('./routes/reports');
 const sodRoutes = require('./routes/sod');
+// Add this import with the other route imports
+const managerRoutes = require('./routes/managers');
 
 // Create Express app
 const app = express();
@@ -78,6 +80,8 @@ app.use(`${API_VERSION}/reviews`, reviewRoutes);
 app.use(`${API_VERSION}/dashboard`, dashboardRoutes);
 app.use(`${API_VERSION}/reports`, reportRoutes);
 app.use(`${API_VERSION}/sod`, sodRoutes);
+// Add this route with the other API routes
+app.use(`${API_VERSION}/managers`, managerRoutes);
 
 // Welcome route
 app.get('/', (req, res) => {

@@ -2,6 +2,10 @@ const { query } = require('../config/database');
 const { successResponse, errorResponse } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
+// Helper to get organization_id from req.user
+const getOrgId = (req) => req.user.organization_id || req.user.organizationId;
+const getUserId = (req) => req.user.id || req.user.userId;
+
 // @desc    Generate campaign report
 // @route   GET /api/v1/reports/campaign/:id
 // @access  Private/Admin/ComplianceManager
@@ -9,7 +13,7 @@ const generateCampaignReport = async (req, res) => {
   try {
     const { id } = req.params;
     const { format = 'json' } = req.query;
-    const organizationId = req.user.organization_id || req.user.organizationId;
+    const organizationId = getOrgId(req);
 
     // Get campaign details
     const campaignResult = await query(
@@ -45,20 +49,12 @@ const generateCampaignReport = async (req, res) => {
       summary: reviewSummary.rows[0],
     };
 
-    // If format is CSV, convert to CSV (simplified)
-    if (format === 'csv') {
-      return res
-        .header('Content-Type', 'text/csv')
-        .header('Content-Disposition', `attachment; filename="campaign-report-${id}.csv"`)
-        .send('CSV export not yet implemented');
-    }
-
     // Log report generation
     try {
       await query(
         `INSERT INTO audit_logs (organization_id, user_id, action, entity_type, entity_id)
          VALUES ($1, $2, $3, $4, $5)`,
-        [organizationId, req.user.id || req.user.userId, 'export', 'campaign_report', id]
+        [organizationId, getUserId(req), 'export', 'campaign_report', id]
       );
     } catch (auditError) {
       logger.error('Audit log failed:', auditError);
@@ -77,7 +73,7 @@ const generateCampaignReport = async (req, res) => {
 // @access  Private/Admin/ComplianceManager
 const getSODViolationsReport = async (req, res) => {
   try {
-    const organizationId = req.user.organization_id || req.user.organizationId;
+    const organizationId = getOrgId(req);
 
     // Get summary by severity
     const summaryResult = await query(
@@ -86,7 +82,8 @@ const getSODViolationsReport = async (req, res) => {
         COUNT(DISTINCT sr.id) as total_rules,
         COUNT(sv.id) as total_violations,
         COUNT(sv.id) FILTER (WHERE sv.is_resolved = false) as unresolved,
-        COUNT(sv.id) FILTER (WHERE sv.is_resolved = true) as resolved
+        COUNT(sv.id) FILTER (WHERE sv.is_resolved = true) as resolved,
+        COUNT(sv.id) as count
        FROM sod_rules sr
        LEFT JOIN sod_violations sv ON sv.rule_id = sr.id
        WHERE sr.organization_id = $1 AND sr.is_active = true
@@ -146,7 +143,7 @@ const getSODViolationsReport = async (req, res) => {
 const getDormantAccountsReport = async (req, res) => {
   try {
     const { daysInactive = 90 } = req.query;
-    const organizationId = req.user.organization_id || req.user.organizationId;
+    const organizationId = getOrgId(req);
 
     const result = await query(
       `SELECT 
@@ -189,7 +186,7 @@ const getDormantAccountsReport = async (req, res) => {
 const getRecertificationSummary = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
-    const organizationId = req.user.organization_id || req.user.organizationId;
+    const organizationId = getOrgId(req);
 
     let dateFilter = '';
     const params = [organizationId];
@@ -243,7 +240,7 @@ const getRecertificationSummary = async (req, res) => {
 const getUserAccessReport = async (req, res) => {
   try {
     const { userId } = req.params;
-    const organizationId = req.user.organization_id || req.user.organizationId;
+    const organizationId = getOrgId(req);
 
     // Get user details
     const userResult = await query(
@@ -303,18 +300,11 @@ const getUserAccessReport = async (req, res) => {
       [userId]
     );
 
-    // Get risk profile if exists
-    const riskProfile = await query(
-      'SELECT * FROM risk_profiles WHERE user_id = $1',
-      [userId]
-    );
-
     return successResponse(res, {
       user,
       access: accessResult.rows,
       review_history: reviewHistory.rows,
       sod_violations: sodViolations.rows,
-      risk_profile: riskProfile.rows[0] || null,
     });
 
   } catch (error) {
@@ -329,7 +319,7 @@ const getUserAccessReport = async (req, res) => {
 const getAuditLogReport = async (req, res) => {
   try {
     const { startDate, endDate, action, userId, entityType, limit = 100 } = req.query;
-    const organizationId = req.user.organization_id || req.user.organizationId;
+    const organizationId = getOrgId(req);
 
     let whereConditions = ['al.organization_id = $1'];
     const params = [organizationId];
@@ -396,11 +386,8 @@ const getAuditLogReport = async (req, res) => {
 const exportReport = async (req, res) => {
   try {
     const { reportType, filters, format = 'json' } = req.body;
-    const organizationId = req.user.organization_id || req.user.organizationId;
-    const userId = req.user.id || req.user.userId;
-
-    // This is a placeholder for report export functionality
-    // In production, you would generate PDF/Excel reports here
+    const organizationId = getOrgId(req);
+    const userId = getUserId(req);
 
     // Log export
     try {

@@ -11,12 +11,14 @@ import {
   HiChevronDown,
   HiChevronRight,
   HiViewGrid,
+  HiUserGroup,
 } from 'react-icons/hi'
 import { useAuth } from '../../context/AuthContext'
 
 const Sidebar = () => {
   const { user } = useAuth()
   const [sodMenuOpen, setSodMenuOpen] = useState(false)
+  const [orgMenuOpen, setOrgMenuOpen] = useState(false)
 
   const menuItems = [
     { name: 'Dashboard', path: '/dashboard', icon: HiHome },
@@ -30,6 +32,11 @@ const Sidebar = () => {
   const sodMenuItems = [
     { name: 'SOD Rules', path: '/sod/rules', icon: HiShieldCheck },
     { name: 'SOD Violations', path: '/sod/violations', icon: HiExclamationCircle },
+  ]
+
+  const orgMenuItems = [
+    { name: 'Hierarchy', path: '/managers/hierarchy', icon: HiUserGroup },
+    { name: 'Delegates', path: '/managers/delegates', icon: HiUsers },
   ]
 
   const isAdmin = ['admin', 'compliance_manager'].includes(user?.role)
@@ -65,6 +72,48 @@ const Sidebar = () => {
               </NavLink>
             )
           })}
+
+          {/* Organization Menu with Submenu - Only for admins */}
+          {isAdmin && (
+            <div className="pt-2">
+              <button
+                onClick={() => setOrgMenuOpen(!orgMenuOpen)}
+                className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all duration-200"
+              >
+                <div className="flex items-center gap-3">
+                  <HiUserGroup className="h-5 w-5" />
+                  <span className="font-medium">Organization</span>
+                </div>
+                {orgMenuOpen ? (
+                  <HiChevronDown className="h-4 w-4" />
+                ) : (
+                  <HiChevronRight className="h-4 w-4" />
+                )}
+              </button>
+
+              {/* Organization Submenu */}
+              {orgMenuOpen && (
+                <div className="mt-1 ml-4 space-y-1">
+                  {orgMenuItems.map((item) => (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200 ${
+                          isActive
+                            ? 'bg-blue-50 text-blue-700 shadow-sm border border-blue-200'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }`
+                      }
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span className="font-medium text-sm">{item.name}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* SOD Menu with Submenu - Only for admins */}
           {isAdmin && (

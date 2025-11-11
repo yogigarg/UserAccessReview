@@ -17,6 +17,14 @@ import ProtectedRoute from './components/auth/ProtectedRoute'
 import Loader from './components/common/Loader'
 import SODRules from './components/sod/SODRules'
 import SODViolations from './components/sod/SODViolations'
+import Reports from './components/reports/Reports'
+import RecertificationSummary from './components/reports/RecertificationSummary'
+import SODViolationsReport from './components/reports/SODViolationsReport'
+import DormantAccounts from './components/reports/DormantAccounts'
+import UserAccessReport from './components/reports/UserAccessReport'
+import AuditLogReport from './components/reports/AuditLogReport'
+import OrgHierarchy from './components/managers/OrgHierarchy'
+import ManagerDelegates from './components/managers/ManagerDelegates'
 
 function App() {
   const { loading } = useAuth()
@@ -62,6 +70,17 @@ function App() {
           {/* SOD Routes */}
           <Route path="sod/rules" element={<SODRules />} />
           <Route path="sod/violations" element={<SODViolations />} />
+          
+          {/* Report Routes */}
+          <Route path="reports" element={<Reports />} />
+          <Route path="reports/recertification-summary" element={<RecertificationSummary />} />
+          <Route path="reports/sod-violations" element={<SODViolationsReport />} />
+          <Route path="reports/dormant-accounts" element={<DormantAccounts />} />
+          <Route path="reports/user-access" element={<UserAccessReport />} />
+          <Route path="reports/audit-logs" element={<AuditLogReport />} />
+
+	  <Route path="managers/hierarchy" element={<OrgHierarchy />} />
+	  <Route path="managers/delegates" element={<ManagerDelegates />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
